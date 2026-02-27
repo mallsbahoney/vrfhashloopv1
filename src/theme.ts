@@ -1,0 +1,56 @@
+/**
+ * App Theme Configuration — VRF Lottery: Dark casino with neon gold/green
+ */
+
+const font = {
+  url: 'https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap',
+  family: "'Outfit', sans-serif",
+};
+
+export const theme = {
+  colors: {
+    background: '220 30% 5%',
+    foreground: '45 100% 92%',
+    card: '220 25% 8%',
+    'card-foreground': '45 100% 92%',
+    popover: '220 25% 9%',
+    'popover-foreground': '45 100% 92%',
+    primary: '45 100% 55%',
+    'primary-foreground': '220 30% 5%',
+    secondary: '220 20% 13%',
+    'secondary-foreground': '45 60% 80%',
+    muted: '220 20% 12%',
+    'muted-foreground': '220 10% 55%',
+    accent: '142 70% 45%',
+    'accent-foreground': '220 30% 5%',
+    destructive: '0 72% 51%',
+    'destructive-foreground': '0 0% 100%',
+    border: '220 20% 15%',
+    input: '220 20% 15%',
+    ring: '45 100% 55%',
+    link: '45 100% 55%',
+    'link-hover': '45 100% 65%',
+    button: '45 100% 55%',
+    'button-foreground': '220 30% 5%',
+    'button-border': '45 100% 45%',
+    'button-hover': '45 100% 62%',
+    'button-hover-foreground': '220 30% 5%',
+    'button-hover-border': '45 100% 70%',
+    'button-ring': '45 100% 55%',
+    'chart-1': '45 100% 55%',
+    'chart-2': '142 70% 45%',
+    'chart-3': '200 80% 55%',
+    'chart-4': '280 65% 60%',
+    'chart-5': '0 72% 51%',
+    'sidebar-background': '220 30% 4%',
+    'sidebar-foreground': '45 60% 80%',
+    'sidebar-primary': '45 100% 55%',
+    'sidebar-primary-foreground': '220 30% 5%',
+    'sidebar-accent': '220 20% 12%',
+    'sidebar-accent-foreground': '45 60% 80%',
+    'sidebar-border': '220 20% 14%',
+    'sidebar-ring': '45 100% 55%',
+  },
+  font,
+  radius: '0.625rem',
+};
