@@ -1,0 +1,239 @@
+{
+  "adminFiles/$fileId": {
+    "type": "storage",
+    "description": "Admin-only file storage",
+    "rules": {
+      "read": "true",
+      "create": "@user.address == @constants.ADMIN_ADDRESS",
+      "update": "false",
+      "delete": "@user.address == @constants.ADMIN_ADDRESS"
+    }
+  },
+  "appFiles/$fileId": {
+    "type": "storage",
+    "description": "App user uploaded files",
+    "rules": {
+      "read": "true",
+      "create": "@user.address != null",
+      "update": "false",
+      "delete": "@user.address == @constants.ADMIN_ADDRESS"
+    }
+  },
+  "commonQueries/$queryId": {
+    "description": "Read-only queries for wallet balances and swap quotes. Supports SOL/USDC/SPL token balance lookups, Jupiter swap quotes, and Meteora dynamic bonding curve quotes.",
+    "operationDetails": {
+      "read": "Anyone can use these queries: (1) Balance queries - check SOL, USDC, or any SPL token balance for any wallet address. (2) Jupiter swap quotes - get expected output amounts for token swaps via Jupiter aggregator. (3) Meteora swap quotes - get expected output amounts for Meteora dynamic bonding curve pools."
+    },
+    "onchain": false,
+    "fields": {},
+    "rules": {
+      "read": "true",
+      "create": "false",
+      "update": "false",
+      "delete": "false"
+    },
+    "queries": {
+      "solBalance": {
+        "description": "Get SOL balance for a wallet address in lamports (1 SOL = 1,000,000,000 lamports). Pass walletAddress as parameter.",
+        "returnType": "UInt",
+        "query": "@TokenPlugin.getBalance(@newData.walletAddress, @constants.SOL)"
+      },
+      "usdcBalance": {
+        "description": "Get USDC balance for a wallet address in base units (1 USDC = 1,000,000 base units with 6 decimals). Pass walletAddress as parameter.",
+        "returnType": "UInt",
+        "query": "@TokenPlugin.getBalance(@newData.walletAddress, @constants.USDC)"
+      },
+      "tokenBalance": {
+        "description": "Get balance for any SPL token mint for a wallet address. Pass walletAddress and tokenMint as parameters. Returns balance in the token's smallest units based on its decimals.",
+        "returnType": "UInt",
+        "query": "@TokenPlugin.getBalance(@newData.walletAddress, @newData.tokenMint)"
+      },
+      "jupiterSwapQuote": {
+        "description": "Get a Jupiter swap quote for exchanging tokens. Pass inputMint (token to sell, use @constants.SOL for native SOL), outputMint (token to buy), and amount (in smallest units like lamports). Returns the expected output amount.",
+        "returnType": "UInt",
+        "query": "@DeFiPlugin.getSwapQuote(@newData.inputMint, @newData.outputMint, @newData.amount)"
+      },
+      "meteoraSwapQuote": {
+        "description": "Get a Meteora dynamic bonding curve swap quote. Pass tokenMintAddress (the pool's base token), tokenToSwapInMintAddress (token to swap in, use @constants.SOL for native SOL), and tokenAmount (in smallest units). Returns the expected output amount.",
+        "returnType": "UInt",
+        "query": "@DeFiPlugin.getMeteoraSwapQuote(@newData.tokenMintAddress, @newData.tokenToSwapInMintAddress, @newData.tokenAmount)"
+      }
+    }
+  },
+  "lotteryPot/$potId": {
+    "description": "Prize pool escrow PDA that holds all ticket purchase SOL",
+    "fields": {
+      "active": "Bool!"
+    },
+    "onchain": true,
+    "rules": {
+      "read": "true",
+      "create": "@user.address == @constants.ADMIN_ADDRESS && $potId == @constants.POT_ID && @newData.active == true",
+      "update": "false",
+      "delete": "false"
+    },
+    "hooks": {
+      "onchain": {
+        "create": "@AccountPlugin.createAccount(@constants.POT_ID)"
+      }
+    },
+    "operationDetails": {
+      "read": "Anyone can check the prize pot balance and status.",
+      "create": "Admin creates the lottery pot PDA once. The potId must match @constants.POT_ID. Creates the on-chain PDA account that holds SOL for prize payouts.",
+      "update": "Operation disallowed. Pot state is managed by hooks only.",
+      "delete": "Operation disallowed. Pot is permanent."
+    },
+    "queries": {
+      "getPotBalance": {
+        "returnType": "UInt",
+        "query": "@TokenPlugin.getBalance(@constants.POT_ID, @constants.SOL)"
+      }
+    }
+  },
+  "lotteryState/$lotteryId": {
+    "description": "Current lottery round state - tracks active status, main number to beat, tickets count, and last winner",
+    "fields": {
+      "isActive": "Bool",
+      "mainNumber": "UInt",
+      "totalTickets": "UInt",
+      "lastWinner": "Address?",
+      "lastWinNumber": "UInt?"
+    },
+    "onchain": true,
+    "rules": {
+      "read": "true",
+      "create": "@user.address != null",
+      "update": "@user.address == @constants.ADMIN_ADDRESS",
+      "delete": "false"
+    },
+    "hooks": {
+      "onchain": {
+        "create": "@OraclePlugin.requestRandomness($lotteryId, /lotteryState/$lotteryId/startReveals/$lotteryId)"
+      }
+    },
+    "operationDetails": {
+      "read": "Anyone can view the current lottery round state including whether it is active, the main number to beat, total tickets, and last winner.",
+      "create": "Any authenticated user can create a new lottery round and request VRF to generate the main number (range 0 to u64 max via @constants.MAX_NUMBER). The round starts inactive until the VRF reveal sets the mainNumber and activates it.",
+      "update": "Admin only. Safety valve to manually deactivate a stuck round by setting isActive to false. Reveal hooks bypass rules via @DocumentPlugin.updateField and are unaffected by this rule.",
+      "delete": "Operation disallowed. Lottery rounds are permanent records."
+    },
+    "queries": {
+      "getMainNumber": {
+        "returnType": "UInt",
+        "query": "@OraclePlugin.getRandomNumber($lotteryId, 0, @constants.MAX_NUMBER)"
+      },
+      "getVRFAddress": {
+        "returnType": "Address",
+        "query": "@OraclePlugin.getVRFAddress($lotteryId)"
+      }
+    }
+  },
+  "lotteryState/$lotteryId/startReveals/$revealId": {
+    "description": "VRF reveal callback for starting the lottery - sets the main number and activates the round",
+    "fields": {},
+    "onchain": true,
+    "isRevealPath": true,
+    "rules": {
+      "read": "true",
+      "create": "$revealId == $lotteryId && get(/lotteryState/$lotteryId) != null && get(/lotteryState/$lotteryId).isActive == false",
+      "update": "false",
+      "delete": "false"
+    },
+    "hooks": {
+      "onchain": {
+        "create": "(get(/lotteryState/$lotteryId).isActive == false && @DocumentPlugin.updateField(/lotteryState/$lotteryId, 'mainNumber', @OraclePlugin.getRandomNumber($lotteryId, 0, @constants.MAX_NUMBER)) && @DocumentPlugin.updateField(/lotteryState/$lotteryId, 'isActive', true)) || true"
+      }
+    },
+    "operationDetails": {
+      "read": "Anyone can view reveal records (fieldless).",
+      "create": "Oracle VRF callback. The revealId must match lotteryId. Reads the random number for this lotteryId (0 to u64 max via @constants.MAX_NUMBER), sets it as mainNumber on the lotteryState, and activates the round. Idempotent via || true pattern.",
+      "update": "Operation disallowed.",
+      "delete": "Operation disallowed."
+    }
+  },
+  "lotteryState/$lotteryId/tickets/$ticketId": {
+    "description": "Individual ticket purchase - each ticket costs 0.01 SOL and generates a VRF random number",
+    "fields": {
+      "buyer": "Address!",
+      "lotteryId": "String!",
+      "won": "Bool?",
+      "winNumber": "UInt?"
+    },
+    "onchain": true,
+    "rules": {
+      "read": "true",
+      "create": "get(/lotteryState/$lotteryId).isActive == true && @newData.buyer == @user.address && @newData.won == null && @newData.winNumber == null",
+      "update": "false",
+      "delete": "false"
+    },
+    "hooks": {
+      "onchain": {
+        "create": "@TokenPlugin.transfer(@user.address, @constants.POT_ID, @constants.SOL, 10000000) && @OraclePlugin.requestRandomness($ticketId, /lotteryState/$lotteryId/ticketReveals/$ticketId)"
+      }
+    },
+    "operationDetails": {
+      "read": "Anyone can view all tickets including buyer, won status, and winning number.",
+      "create": "Authenticated user buys a ticket for 0.01 SOL (10000000 lamports). Lottery must be active. Buyer must equal @user.address. SOL is transferred to the pot PDA via onchain hook. VRF randomness is requested for this ticket with u64 max range. The won and winNumber fields start null and are set by the reveal hook.",
+      "update": "Operation disallowed. Ticket state is updated only via reveal hooks.",
+      "delete": "Operation disallowed. Tickets are permanent records."
+    },
+    "queries": {
+      "getTicketNumber": {
+        "returnType": "UInt",
+        "query": "@OraclePlugin.getRandomNumber($ticketId, 0, @constants.MAX_NUMBER)"
+      },
+      "getTicketVRFAddress": {
+        "returnType": "Address",
+        "query": "@OraclePlugin.getVRFAddress($ticketId)"
+      }
+    }
+  },
+  "lotteryState/$lotteryId/ticketReveals/$ticketId": {
+    "description": "VRF reveal callback for ticket settlement - determines if ticket wins by comparing random number to mainNumber",
+    "fields": {},
+    "onchain": true,
+    "isRevealPath": true,
+    "rules": {
+      "read": "true",
+      "create": "get(/lotteryState/$lotteryId/tickets/$ticketId) != null && get(/lotteryState/$lotteryId/tickets/$ticketId).won == null",
+      "update": "false",
+      "delete": "false"
+    },
+    "hooks": {
+      "onchain": {
+        "create": "(get(/lotteryState/$lotteryId/tickets/$ticketId).won == null && @DocumentPlugin.updateField(/lotteryState/$lotteryId/tickets/$ticketId, 'winNumber', @OraclePlugin.getRandomNumber($ticketId, 0, @constants.MAX_NUMBER)) && ((@OraclePlugin.getRandomNumber($ticketId, 0, @constants.MAX_NUMBER) > get(/lotteryState/$lotteryId).mainNumber && @DocumentPlugin.updateField(/lotteryState/$lotteryId/tickets/$ticketId, 'won', true) && @TokenPlugin.transfer(@constants.POT_ID, get(/lotteryState/$lotteryId/tickets/$ticketId).buyer, @constants.SOL, @TokenPlugin.getBalance(@constants.POT_ID, @constants.SOL) * 99 // 100) && @DocumentPlugin.updateField(/lotteryState/$lotteryId, 'isActive', false) && @DocumentPlugin.updateField(/lotteryState/$lotteryId, 'lastWinner', get(/lotteryState/$lotteryId/tickets/$ticketId).buyer) && @DocumentPlugin.updateField(/lotteryState/$lotteryId, 'lastWinNumber', @OraclePlugin.getRandomNumber($ticketId, 0, @constants.MAX_NUMBER))) || (@DocumentPlugin.updateField(/lotteryState/$lotteryId/tickets/$ticketId, 'won', false)))) || true"
+      }
+    },
+    "operationDetails": {
+      "read": "Anyone can view reveal records (fieldless).",
+      "create": "Oracle VRF callback. Settlement logic: Reads ticket random number (0 to u64 max via @constants.MAX_NUMBER). If number > mainNumber, ticket wins - 99% of pot balance is transferred to buyer via @TokenPlugin.transfer from PDA using integer division (1% remains in pot as seed for next round), lottery deactivates, lastWinner and lastWinNumber are set on lotteryState. If number <= mainNumber, ticket is marked as lost and pot keeps growing. Uses get() for buyer field (immutable, set on ticket create). Idempotent via || true pattern and won == null guard.",
+      "update": "Operation disallowed.",
+      "delete": "Operation disallowed."
+    }
+  },
+  "lotteryPotFunding/$fundingId": {
+    "description": "Admin seeds the prize pot with additional SOL",
+    "fields": {
+      "amt": "UInt!"
+    },
+    "onchain": true,
+    "isPassthrough": true,
+    "rules": {
+      "read": "true",
+      "create": "@user.address == @constants.ADMIN_ADDRESS",
+      "update": "false",
+      "delete": "false"
+    },
+    "hooks": {
+      "onchain": {
+        "create": "@TokenPlugin.transfer(@user.address, @constants.POT_ID, @constants.SOL, @newData.amt)"
+      }
+    },
+    "operationDetails": {
+      "read": "Anyone can view funding history.",
+      "create": "Admin only. Transfers the specified amount of SOL (in lamports) from admin wallet to the pot PDA via onchain hook. Used to seed or top up the prize pool.",
+      "update": "Operation disallowed. Passthrough collection has no on-chain state to update.",
+      "delete": "Operation disallowed. Passthrough collection has no on-chain state to delete."
+    }
+  }
+}
