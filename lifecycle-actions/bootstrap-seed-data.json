@@ -1,0 +1,41 @@
+{
+  "version": "1",
+  "kind": "bootstrap",
+  "scope": "seed-data",
+  "executionTarget": "server",
+  "description": "Initialize VRF lottery system: create lottery pot PDA and first lottery round",
+  "targetEnvironments": ["mock"],
+  "bootstrapType": "seed-data",
+  "clearFirst": true,
+  "actors": {
+    "admin": "6CcS7XFLnHA3fQLjDXUmZiN6zZhrQNScdq7AhUBkcLQZ"
+  },
+  "steps": [
+    { "op": "as", "who": "admin" },
+    {
+      "op": "setMany",
+      "writes": [
+        {
+          "path": "lotteryPot/lottery-pot",
+          "data": {
+            "active": true
+          }
+        }
+      ]
+    },
+    { "op": "as", "who": "admin" },
+    {
+      "op": "setMany",
+      "writes": [
+        {
+          "path": "lotteryState/round-1",
+          "data": {
+            "isActive": false,
+            "mainNumber": 0,
+            "totalTickets": 0
+          }
+        }
+      ]
+    }
+  ]
+}
