@@ -1,0 +1,17 @@
+{
+  "info": {
+    "title": "API",
+    "version": "1.0.0",
+    "generatedAt": "2026-02-27T08:07:59.381Z"
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "description": "Health check",
+      "authentication": {
+        "required": false
+      }
+    }
+  ]
+}
